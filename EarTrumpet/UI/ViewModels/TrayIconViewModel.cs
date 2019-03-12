@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows;
 
@@ -65,6 +66,7 @@ namespace EarTrumpet.UI.ViewModels
         private readonly string _trayIconPath = Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\SndVolSSO.dll");
         private readonly DeviceCollectionViewModel _mainViewModel;
         private readonly Dictionary<IconId, Icon> _icons = new Dictionary<IconId, Icon>();
+        private readonly Icon _earTrumpetLegacyIcon;
         private DeviceViewModel _defaultDevice;
         private bool _useLegacyIcon;
         private Icon _trayIcon;
@@ -77,6 +79,7 @@ namespace EarTrumpet.UI.ViewModels
             RightClick = new RelayCommand(() => ContextMenuRequested?.Invoke());
             MiddleClick = new RelayCommand(ToggleMute);
 
+            _earTrumpetLegacyIcon = new Icon(Application.GetResourceStream(new Uri("pack://application:,,,/EarTrumpet;component/Assets/Tray.ico")).Stream);
             LoadIconResources();
 
             _useLegacyIcon = SettingsService.UseLegacyIcon;
@@ -192,14 +195,13 @@ namespace EarTrumpet.UI.ViewModels
 
         private void LoadIconResources()
         {
-            _icons.Clear();
             var useLargeIcon = WindowsTaskbar.Current.Dpi > 1;
             Trace.WriteLine($"TrayViewModel LoadIconResources useLargeIcon={useLargeIcon}");
 
-            var originalIcon = new Icon(Application.GetResourceStream(new Uri("pack://application:,,,/EarTrumpet;component/Assets/Tray.ico")).Stream);
             try
             {
-                _icons.Add(IconId.OriginalIcon, originalIcon);
+                _icons.Clear();
+                _icons.Add(IconId.OriginalIcon, _earTrumpetLegacyIcon);
                 _icons.Add(IconId.NoDevice, IconUtils.GetIconFromFile(_trayIconPath, (int)IconId.NoDevice, useLargeIcon));
                 _icons.Add(IconId.Muted, IconUtils.GetIconFromFile(_trayIconPath, (int)IconId.Muted, useLargeIcon));
                 _icons.Add(IconId.SpeakerOneBar, IconUtils.GetIconFromFile(_trayIconPath, (int)IconId.SpeakerOneBar, useLargeIcon));
@@ -208,16 +210,16 @@ namespace EarTrumpet.UI.ViewModels
             }
             catch (Exception ex)
             {
-                Trace.WriteLine($"{ex}");
+                Trace.WriteLine($"TrayViewModel LoadIconResources Error: {ex}");
 
                 _icons.Clear();
-                _icons.Add(IconId.OriginalIcon, originalIcon);
-                _icons.Add(IconId.NoDevice, originalIcon);
-                _icons.Add(IconId.Muted, originalIcon);
-                _icons.Add(IconId.SpeakerZeroBars, originalIcon);
-                _icons.Add(IconId.SpeakerOneBar, originalIcon);
-                _icons.Add(IconId.SpeakerTwoBars, originalIcon);
-                _icons.Add(IconId.SpeakerThreeBars, originalIcon);
+                _icons.Add(IconId.OriginalIcon, _earTrumpetLegacyIcon);
+                _icons.Add(IconId.NoDevice, _earTrumpetLegacyIcon);
+                _icons.Add(IconId.Muted, _earTrumpetLegacyIcon);
+                _icons.Add(IconId.SpeakerZeroBars, _earTrumpetLegacyIcon);
+                _icons.Add(IconId.SpeakerOneBar, _earTrumpetLegacyIcon);
+                _icons.Add(IconId.SpeakerTwoBars, _earTrumpetLegacyIcon);
+                _icons.Add(IconId.SpeakerThreeBars, _earTrumpetLegacyIcon);
             }
         }
 
@@ -318,7 +320,11 @@ namespace EarTrumpet.UI.ViewModels
         {
             try
             {
-                using (Process.Start("rundll32.exe", $"shell32.dll,Control_RunDLL mmsys.cpl,,{panel}"))
+                var rundllPath = Path.Combine(
+                    Environment.GetEnvironmentVariable("SystemRoot"),
+                    (Environment.Is64BitOperatingSystem ? @"sysnative\rundll32.exe" : @"system32\rundll32.exe"));
+
+                using (Process.Start(rundllPath, $"shell32.dll,Control_RunDLL mmsys.cpl,,{panel}"))
                 { }
             }
             catch (Exception ex)

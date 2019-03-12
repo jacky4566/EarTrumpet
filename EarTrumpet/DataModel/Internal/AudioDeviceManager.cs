@@ -119,18 +119,17 @@ namespace EarTrumpet.DataModel.Internal
 
         public IAudioDevice GetDefaultDevice(ERole eRole = ERole.eMultimedia)
         {
-            IMMDevice device = null;
             try
             {
-                device = _enumerator.GetDefaultAudioEndpoint(Flow, ERole.eMultimedia);
+                var rawDevice = _enumerator.GetDefaultAudioEndpoint(Flow, ERole.eMultimedia);
+                _devices.TryFind(rawDevice.GetId(), out var device);
+                return device;
             }
             catch (Exception ex) when (ex.Is(HRESULT.ERROR_NOT_FOUND))
             {
                 // Expected.
+                return null;
             }
-
-            _devices.TryFind(device.GetId(), out var dev);
-            return dev;
         }
 
         public void MoveHiddenAppsToDevice(string appId, string id)
@@ -149,8 +148,9 @@ namespace EarTrumpet.DataModel.Internal
             {
                 try
                 {
-                    IMMDevice device = _enumerator.GetDevice(pwstrDeviceId);
-                    if (((IMMEndpoint)device).GetDataFlow() == Flow)
+                    var device = _enumerator.GetDevice(pwstrDeviceId);
+                    if (((IMMEndpoint)device).GetDataFlow() == Flow &&
+                        device.GetState() == DeviceState.ACTIVE)
                     {
                         var newDevice = new AudioDevice(this, device);
 

@@ -15,15 +15,20 @@ namespace EarTrumpet.UI.Views
     {
         private readonly FlyoutViewModel _viewModel;
         private RawInputListener _rawListener;
+        private bool _needsExpandOrCollapse;
 
         public FlyoutWindow(FlyoutViewModel flyoutViewModel)
         {
             InitializeComponent();
 
             _viewModel = flyoutViewModel;
-
             _viewModel.StateChanged += ViewModel_OnStateChanged;
             _viewModel.WindowSizeInvalidated += ViewModel_WindowSizeInvalidated;
+            _viewModel.ExpandCollapse = new RelayCommand(() =>
+            {
+                _needsExpandOrCollapse = true;
+                _viewModel.BeginClose();
+            });
 
             DataContext = _viewModel;
 
@@ -84,7 +89,16 @@ namespace EarTrumpet.UI.Views
 
         private void ThemeChanged()
         {
+            EnableBlurIfApplicable();
+        }
+
+        private void EnableBlurIfApplicable()
+        {
             AccentPolicyLibrary.SetWindowBlur(this, SystemSettings.IsTransparencyEnabled && !SystemParameters.HighContrast);
+        }
+        private void DisableBlur()
+        {
+            AccentPolicyLibrary.SetWindowBlur(this, false);
         }
 
         private void FlyoutWindow_MouseEnter(object sender, MouseEventArgs e)
@@ -110,7 +124,7 @@ namespace EarTrumpet.UI.Views
             }
         }
 
-        private void ViewModel_OnStateChanged(object sender, FlyoutViewModel.CloseReason e)
+        private void ViewModel_OnStateChanged(object sender, object e)
         {
             switch (_viewModel.State)
             {
@@ -135,7 +149,7 @@ namespace EarTrumpet.UI.Views
                 case FlyoutViewModel.ViewState.Closing_Stage1:
                     _rawListener.Stop();
 
-                    if (e == FlyoutViewModel.CloseReason.CloseThenOpen)
+                    if (_needsExpandOrCollapse)
                     {
                         WindowAnimationLibrary.BeginFlyoutExitanimation(this, () =>
                         {
@@ -149,7 +163,17 @@ namespace EarTrumpet.UI.Views
                     {
                         this.Cloak();
                         Hide();
+                        DisableBlur();
                         _viewModel.ChangeState(FlyoutViewModel.ViewState.Closing_Stage2);
+                    }
+                    break;
+                case FlyoutViewModel.ViewState.Hidden:
+                    if (_needsExpandOrCollapse)
+                    {
+                        _needsExpandOrCollapse = false;
+
+                        _viewModel.DoExpandCollapse();
+                        _viewModel.BeginOpen();
                     }
                     break;
             }
@@ -197,6 +221,11 @@ namespace EarTrumpet.UI.Views
             double newHeight = LayoutRoot.DesiredSize.Height;
 
             var scaledWorkAreaHeight = taskbarState.ContainingScreen.WorkingArea.Height / this.DpiHeightFactor();
+            if (taskbarState.IsAutoHideEnabled && (taskbarState.Location == WindowsTaskbar.Position.Top || taskbarState.Location == WindowsTaskbar.Position.Bottom))
+            {
+                scaledWorkAreaHeight -= taskbarState.Size.Bottom - taskbarState.Size.Top;
+            }
+
             if (newHeight > scaledWorkAreaHeight)
             {
                 newHeight = scaledWorkAreaHeight;
